@@ -48,17 +48,23 @@ jobs:
         echo "PATH=$PATH:$(pwd)/android-sdk/platform-tools" >> $GITHUB_ENV
         echo "Set ANDROID_HOME to: $ANDROID_HOME"
 
-    # 6. Проверка доступности sdkmanager
+    # 6. Проверка доступных пакетов
+    - name: List available SDK packages
+      run: |
+        echo "Current ANDROID_HOME: $ANDROID_HOME"
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list | grep ndk
+
+    # 7. Установка SDK и NDK
     - name: Verify sdkmanager
       run: |
         echo "Current ANDROID_HOME: $ANDROID_HOME"
         ls -la $ANDROID_HOME
         ls -la $ANDROID_HOME/cmdline-tools/latest/bin
         $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --version
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "build-tools;33.0.0" "platforms;android-33" "ndk;23b"
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "build-tools;33.0.0" "platforms;android-33" "ndk;25.2.9519653"
         yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses
 
-    # 7. Инициализация Buildozer
+    # 8. Инициализация Buildozer
     - name: Initialize Buildozer
       run: |
         echo "ANDROID_HOME in Buildozer step: $ANDROID_HOME"
@@ -73,9 +79,9 @@ jobs:
         sed -i 's/#source.include_patterns = assets\/*,README.md/source.include_patterns = icon.png/' buildozer.spec
         sed -i 's/#android.api = 27/android.api = 33/' buildozer.spec
         sed -i 's/#android.minapi = 21/android.minapi = 21/' buildozer.spec
-        sed -i 's/#android.ndk = 23b/android.ndk = 23b/' buildozer.spec
+        sed -i 's/#android.ndk = 23b/android.ndk = 25.2.9519653/' buildozer.spec
 
-    # 8. Диагностика перед сборкой
+    # 9. Диагностика перед сборкой
     - name: Debug info
       run: |
         lsb_release -a
@@ -88,7 +94,7 @@ jobs:
         ls -la $ANDROID_HOME
         ls -la $ANDROID_HOME/cmdline-tools/latest/bin
 
-    # 9. Компиляция APK
+    # 10. Компиляция APK
     - name: Build APK
       run: |
         echo "ANDROID_HOME in Build APK step: $ANDROID_HOME"
@@ -96,7 +102,7 @@ jobs:
       env:
         ANDROID_HOME: ${{ env.ANDROID_HOME }}
 
-    # 10. Загрузка APK как артефакта
+    # 11. Загрузка APK как артефакта
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
