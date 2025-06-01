@@ -34,7 +34,7 @@ jobs:
         sudo apt update
         sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf automake libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 cmake libffi-dev libssl-dev
         python -m pip install --upgrade pip
-        pip install --user buildozer cython==0.29.36  # Обновили до 0.29.36 для совместимости
+        pip install --user buildozer cython==0.29.36
 
     # 5. Установка Android SDK и NDK вручную
     - name: Install Android SDK and NDK
@@ -53,7 +53,7 @@ jobs:
     - name: List available SDK packages
       run: |
         echo "Current ANDROID_HOME: $ANDROID_HOME"
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list | grep ndk
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list | grep -E 'build-tools|ndk'
 
     # 7. Установка SDK и NDK
     - name: Verify sdkmanager
@@ -63,7 +63,7 @@ jobs:
         ls -la $ANDROID_HOME/cmdline-tools/latest/bin
         $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --version
         for i in {1..3}; do
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "build-tools;33.0.0" "platforms;android-33" "ndk;25.2.9519653" && break
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "build-tools;36.0.0" "platforms;android-33" "ndk;25.2.9519653" && break
           echo "Retrying ($i/3)..."
           sleep 10
         done
@@ -98,10 +98,12 @@ jobs:
         buildozer --version
         ls -la $ANDROID_HOME
         ls -la $ANDROID_HOME/cmdline-tools/latest/bin
-        df -h  # Проверка свободного места
+        ls -la $ANDROID_HOME/build-tools
+        df -h
 
     # 10. Компиляция APK
     - name: Build APK
+      timeout-minutes: 60
       run: |
         echo "ANDROID_HOME in Build APK step: $ANDROID_HOME"
         buildozer android debug
