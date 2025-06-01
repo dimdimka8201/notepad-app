@@ -80,7 +80,7 @@ jobs:
           echo "79120722343a6f314e0719f863036c702b0e6b2a" > $BUILDOZER_ANDROID_SDK/licenses/android-ndk-license
           echo "c5d028512b2ee471fdc0df39c09d954d50b6e2b2" >> $BUILDOZER_ANDROID_SDK/licenses/android-ndk-license
 
-      # 8. Установка SDK компонентов
+      # 8. Установка SDK компонентов и создание совместимости со старой структурой
       - name: Install SDK components
         run: |
           # Установка стабильных версий компонентов
@@ -90,13 +90,28 @@ jobs:
             "ndk;25.2.9519653" \
             "platform-tools"
           
+          # Создание старой структуры директорий для совместимости с buildozer
+          mkdir -p $BUILDOZER_ANDROID_SDK/tools/bin
+          
+          # Создание символических ссылок на новое расположение tools
+          ln -sf $BUILDOZER_ANDROID_SDK/cmdline-tools/latest/bin/sdkmanager $BUILDOZER_ANDROID_SDK/tools/bin/sdkmanager
+          ln -sf $BUILDOZER_ANDROID_SDK/cmdline-tools/latest/bin/avdmanager $BUILDOZER_ANDROID_SDK/tools/bin/avdmanager
+          
+          # Также создаем директорию tools/lib для полной совместимости
+          mkdir -p $BUILDOZER_ANDROID_SDK/tools/lib
+          if [ -d "$BUILDOZER_ANDROID_SDK/cmdline-tools/latest/lib" ]; then
+            ln -sf $BUILDOZER_ANDROID_SDK/cmdline-tools/latest/lib/* $BUILDOZER_ANDROID_SDK/tools/lib/
+          fi
+          
           # Проверка установки
           echo "=== Installed SDK components ==="
           ls -la $BUILDOZER_ANDROID_SDK/
           echo "=== Build tools ==="
           ls -la $BUILDOZER_ANDROID_SDK/build-tools/
-          echo "=== NDK ==="
-          ls -la $BUILDOZER_ANDROID_SDK/ndk/ || echo "NDK directory structure:"
+          echo "=== Tools directory (old structure) ==="
+          ls -la $BUILDOZER_ANDROID_SDK/tools/bin/
+          echo "=== Testing sdkmanager symlink ==="
+          $BUILDOZER_ANDROID_SDK/tools/bin/sdkmanager --version || echo "sdkmanager symlink failed"
 
       # 9. Инициализация и настройка Buildozer
       - name: Configure Buildozer
@@ -121,12 +136,17 @@ jobs:
           sed -i 's/#android.minapi = 21/android.minapi = 21/' buildozer.spec
           sed -i 's/#android.ndk = 25.2.9519653/android.ndk = 25.2.9519653/' buildozer.spec
           
-          # Явное указание путей и версий
+          # Явное указание путей SDK для buildozer (КРИТИЧЕСКИ ВАЖНО!)
+          sed -i 's/#android.sdk_path = /android.sdk_path = ~\/.buildozer\/android\/platform\/android-sdk/' buildozer.spec
+          sed -i 's/#android.ndk_path = /android.ndk_path = ~\/.buildozer\/android\/platform\/android-sdk\/ndk\/25.2.9519653/' buildozer.spec
+          
+          # Добавление дополнительных настроек
           echo "" >> buildozer.spec
           echo "# Explicit Android configuration" >> buildozer.spec
           echo "android.gradle_version = 7.4" >> buildozer.spec
           echo "android.gradle_plugin_version = 7.4.0" >> buildozer.spec
           echo "android.ant_path = /usr/bin" >> buildozer.spec
+          echo "android.skip_update = False" >> buildozer.spec
 
       # 10. Диагностика
       - name: Debug info
