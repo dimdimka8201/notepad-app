@@ -14,13 +14,20 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 2. Установка Python 3.9
+    # 2. Очистка места на диске
+    - name: Free up disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        df -h
+
+    # 3. Установка Python 3.9
     - name: Set up Python 3.9
       uses: actions/setup-python@v5
       with:
         python-version: '3.9'
 
-    # 3. Установка зависимостей
+    # 4. Установка зависимостей
     - name: Install dependencies
       run: |
         sudo apt update
@@ -28,18 +35,18 @@ jobs:
         python -m pip install --upgrade pip
         pip install --user buildozer cython==0.29.19
 
-    # 4. Установка Android SDK
-    - name: Setup Android SDK
-      uses: actions/setup-android@v3
-      with:
-        api-level: 33
-        build-tools: 33.0.0
-        ndk: 23b
-
-    # 5. Принятие лицензий Android SDK
-    - name: Accept Android SDK licenses
+    # 5. Установка Android SDK и NDK вручную
+    - name: Install Android SDK and NDK
       run: |
-        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O commandlinetools.zip
+        unzip commandlinetools.zip -d cmdline-tools
+        mkdir -p android-sdk
+        mv cmdline-tools/cmdline-tools android-sdk/cmdline-tools
+        echo "export ANDROID_HOME=$(pwd)/android-sdk" >> $GITHUB_ENV
+        echo "export PATH=$PATH:$(pwd)/android-sdk/cmdline-tools/bin" >> $GITHUB_ENV
+        echo "export PATH=$PATH:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
+        $ANDROID_HOME/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME "build-tools;33.0.0" "platforms;android-33" "ndk;23b"
+        yes | $ANDROID_HOME/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses
 
     # 6. Инициализация Buildozer
     - name: Initialize Buildozer
@@ -66,6 +73,7 @@ jobs:
         echo "ANDROID_HOME: $ANDROID_HOME"
         echo "PATH: $PATH"
         buildozer --version
+        ls -la $ANDROID_HOME
 
     # 8. Компиляция APK
     - name: Build APK
