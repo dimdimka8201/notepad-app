@@ -40,15 +40,21 @@ jobs:
       run: |
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O commandlinetools.zip
         unzip commandlinetools.zip -d cmdline-tools
-        mkdir -p android-sdk
-        mv cmdline-tools/cmdline-tools android-sdk/cmdline-tools
+        mkdir -p android-sdk/cmdline-tools
+        mv cmdline-tools/cmdline-tools android-sdk/cmdline-tools/latest
         echo "export ANDROID_HOME=$(pwd)/android-sdk" >> $GITHUB_ENV
-        echo "export PATH=$PATH:$(pwd)/android-sdk/cmdline-tools/bin" >> $GITHUB_ENV
+        echo "export PATH=$PATH:$(pwd)/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_ENV
         echo "export PATH=$PATH:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
-        $ANDROID_HOME/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME "build-tools;33.0.0" "platforms;android-33" "ndk;23b"
-        yes | $ANDROID_HOME/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses
 
-    # 6. Инициализация Buildozer
+    # 6. Проверка доступности sdkmanager
+    - name: Verify sdkmanager
+      run: |
+        ls -la $ANDROID_HOME/cmdline-tools/latest/bin
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --version
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "build-tools;33.0.0" "platforms;android-33" "ndk;23b"
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses
+
+    # 7. Инициализация Buildozer
     - name: Initialize Buildozer
       run: |
         buildozer init
@@ -64,7 +70,7 @@ jobs:
         sed -i 's/#android.minapi = 21/android.minapi = 21/' buildozer.spec
         sed -i 's/#android.ndk = 23b/android.ndk = 23b/' buildozer.spec
 
-    # 7. Диагностика перед сборкой
+    # 8. Диагностика перед сборкой
     - name: Debug info
       run: |
         lsb_release -a
@@ -75,15 +81,16 @@ jobs:
         echo "PATH: $PATH"
         buildozer --version
         ls -la $ANDROID_HOME
+        ls -la $ANDROID_HOME/cmdline-tools/latest/bin
 
-    # 8. Компиляция APK
+    # 9. Компиляция APK
     - name: Build APK
       run: |
         buildozer android debug
       env:
         ANDROID_HOME: ${{ env.ANDROID_HOME }}
 
-    # 9. Загрузка APK как артефакта
+    # 10. Загрузка APK как артефакта
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
