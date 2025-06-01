@@ -38,17 +38,20 @@ jobs:
     # 5. Установка Android SDK и NDK вручную
     - name: Install Android SDK and NDK
       run: |
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O commandlinetools.zip
-        unzip commandlinetools.zip -d cmdline-tools
         mkdir -p android-sdk/cmdline-tools
-        mv cmdline-tools/cmdline-tools android-sdk/cmdline-tools/latest
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O commandlinetools.zip
+        unzip commandlinetools.zip -d android-sdk/cmdline-tools
+        mv android-sdk/cmdline-tools/cmdline-tools android-sdk/cmdline-tools/latest
         echo "export ANDROID_HOME=$(pwd)/android-sdk" >> $GITHUB_ENV
         echo "export PATH=$PATH:$(pwd)/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_ENV
-        echo "export PATH=$PATH:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
+        echo "export PATH=$PATH:$(pwd)/android-sdk/platform-tools" >> $GITHUB_ENV
+        echo "ANDROID_HOME set to: $ANDROID_HOME" >> $GITHUB_ENV
 
     # 6. Проверка доступности sdkmanager
     - name: Verify sdkmanager
       run: |
+        echo "Current ANDROID_HOME: $ANDROID_HOME"
+        ls -la $ANDROID_HOME
         ls -la $ANDROID_HOME/cmdline-tools/latest/bin
         $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --version
         $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "build-tools;33.0.0" "platforms;android-33" "ndk;23b"
@@ -57,6 +60,7 @@ jobs:
     # 7. Инициализация Buildozer
     - name: Initialize Buildozer
       run: |
+        echo "ANDROID_HOME in Buildozer step: $ANDROID_HOME"
         buildozer init
         sed -i 's/title = My Application/title = Notepad/' buildozer.spec
         sed -i 's/package.name = myapp/package.name = notepad/' buildozer.spec
@@ -86,6 +90,7 @@ jobs:
     # 9. Компиляция APK
     - name: Build APK
       run: |
+        echo "ANDROID_HOME in Build APK step: $ANDROID_HOME"
         buildozer android debug
       env:
         ANDROID_HOME: ${{ env.ANDROID_HOME }}
