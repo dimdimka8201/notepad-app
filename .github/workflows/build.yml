@@ -2,8 +2,8 @@ name: Build APK
 
 on:
   push:
-    branches: [ main ]  # Запуск при пуше в ветку main
-  workflow_dispatch:    # Позволяет запускать вручную
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,14 +14,34 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 2. Установка зависимостей
-    - name: Set up environment
+    # 2. Установка Python 3.9
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    # 3. Установка зависимостей
+    - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf automake libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev gettext
-        pip install --user --upgrade buildozer cython==0.29.19
+        sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf automake libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+        python -m pip install --upgrade pip
+        pip install --user buildozer cython==0.29.19
 
-    # 3. Инициализация Buildozer
+    # 4. Установка Android SDK
+    - name: Install Android SDK
+      uses: actions/setup-android@v4
+      with:
+        api-level: 33
+        build-tools: 33.0.0
+        ndk: 23b
+
+    # 5. Принятие лицензий Android SDK
+    - name: Accept Android SDK licenses
+      run: |
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+
+    # 6. Инициализация Buildozer
     - name: Initialize Buildozer
       run: |
         buildozer init
@@ -32,14 +52,29 @@ jobs:
         sed -i 's/requirements = python3,kivy/requirements = python3,kivy==2.2.0,sqlite3/' buildozer.spec
         sed -i 's/#android.permissions = INTERNET/android.permissions = INTERNET,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE/' buildozer.spec
         sed -i 's/source.include_exts = py,png,jpg,kv,atlas/source.include_exts = py,png,jpg,kv,atlas,db/' buildozer.spec
-        sed -i 's/#source.include_patterns = assets\/*,README.md/source.include_patterns = notepad.db,icon.png/' buildozer.spec
+        sed -i 's/#source.include_patterns = assets\/*,README.md/source.include_patterns = icon.png/' buildozer.spec
+        sed -i 's/#android.api = 27/android.api = 33/' buildozer.spec
+        sed -i 's/#android.minapi = 21/android.minapi = 21/' buildozer.spec
+        sed -i 's/#android.ndk = 23b/android.ndk = 23b/' buildozer.spec
 
-    # 4. Компиляция APK
+    # 7. Диагностика перед сборкой
+    - name: Debug info
+      run: |
+        ls -la
+        python --version
+        pip list | grep -E 'buildozer|cython|kivy'
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "PATH: $PATH"
+        buildozer --version
+
+    # 8. Компиляция APK
     - name: Build APK
       run: |
         buildozer android debug
+      env:
+        ANDROID_HOME: ${{ env.ANDROID_HOME }}
 
-    # 5. Загрузка APK как артефакта
+    # 9. Загрузка APK как артефакта
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
