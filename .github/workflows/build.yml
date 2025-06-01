@@ -55,25 +55,40 @@ jobs:
         echo "Current ANDROID_HOME: $ANDROID_HOME"
         $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list | grep -E 'build-tools|ndk'
 
-    # 7. Установка SDK и NDK
+    # 7. Принятие лицензий (до установки)
+    - name: Pre-accept licenses
+      run: |
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses || true
+
+    # 8. Установка SDK и NDK
     - name: Install SDK components
       run: |
         echo "Current ANDROID_HOME: $ANDROID_HOME"
         ls -la $ANDROID_HOME
         ls -la $ANDROID_HOME/cmdline-tools/latest/bin
         $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --version
-        # Устанавливаем последнюю доступную версию build-tools
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platforms;android-33" "ndk;25.2.9519653"
-        # Устанавливаем build-tools (замените на версию из List available SDK packages)
+        # Устанавливаем платформы и NDK
+        for i in {1..3}; do
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platforms;android-33" "ndk;25.2.9519653" && break
+          echo "Retrying platforms and NDK ($i/3)..."
+          sleep 10
+        done
+        # Выбираем последнюю версию build-tools
         LATEST_BUILD_TOOLS=$($ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list | grep 'build-tools;' | tail -1 | awk '{print $1}')
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "$LATEST_BUILD_TOOLS"
+        echo "Selected build-tools version: $LATEST_BUILD_TOOLS"
+        # Устанавливаем build-tools с повторными попытками
+        for i in {1..3}; do
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "$LATEST_BUILD_TOOLS" && break
+          echo "Retrying build-tools ($i/3)..."
+          sleep 10
+        done
 
-    # 8. Принятие лицензий
-    - name: Accept licenses
+    # 9. Принятие лицензий (после установки)
+    - name: Post-accept licenses
       run: |
-        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME --licenses || true
 
-    # 9. Инициализация Buildozer
+    # 10. Инициализация Buildozer
     - name: Initialize Buildozer
       run: |
         echo "ANDROID_HOME in Buildozer step: $ANDROID_HOME"
@@ -90,7 +105,7 @@ jobs:
         sed -i 's/#android.minapi = 21/android.minapi = 21/' buildozer.spec
         sed -i 's/#android.ndk = 25.2.9519653/android.ndk = 25.2.9519653/' buildozer.spec
 
-    # 10. Диагностика перед сборкой
+    # 11. Диагностика перед сборкой
     - name: Debug info
       run: |
         lsb_release -a
@@ -101,10 +116,10 @@ jobs:
         echo "PATH: $PATH"
         buildozer --version
         ls -la $ANDROID_HOME
-        ls -la $ANDROID_HOME/build-tools
+        ls -la $ANDROID_HOME/build-tools || echo "build-tools directory not found"
         df -h
 
-    # 11. Компиляция APK
+    # 12. Компиляция APK
     - name: Build APK
       timeout-minutes: 60
       run: |
@@ -113,7 +128,7 @@ jobs:
       env:
         ANDROID_HOME: ${{ env.ANDROID_HOME }}
 
-    # 12. Загрузка APK как артефакта
+    # 13. Загрузка APK как артефакта
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
