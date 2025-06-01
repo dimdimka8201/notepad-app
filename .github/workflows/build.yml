@@ -29,8 +29,8 @@ jobs:
         pip install --user buildozer cython==0.29.19
 
     # 4. Установка Android SDK
-    - name: Install Android SDK
-      uses: actions/setup-android@v4
+    - name: Setup Android SDK
+      uses: actions/setup-android@v3
       with:
         api-level: 33
         build-tools: 33.0.0
