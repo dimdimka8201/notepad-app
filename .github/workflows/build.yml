@@ -46,11 +46,13 @@ jobs:
           ls -la /usr/lib/x86_64-linux-gnu/pkgconfig/openssl.pc || echo "openssl.pc not found"
           dpkg -l | grep libssl-dev || echo "libssl-dev not installed"
 
-      # 5. Очистка конфликтующих версий NDK
-      - name: Clean up other NDK versions
+      # 5. Очистка конфликтующих версий NDK и старых кэшей
+      - name: Clean up other NDK versions and caches
         run: |
           sudo rm -rf /usr/local/lib/android/sdk/ndk/*
           sudo rm -rf ~/.buildozer/android/platform/android-ndk-*
+          sudo rm -rf ~/.buildozer/cache
+          sudo rm -rf ~/.buildozer/android/platform/python-for-android
 
       # 6. Создание директории для Buildozer
       - name: Setup Buildozer directories
@@ -101,7 +103,13 @@ jobs:
           find $BUILDOZER_ANDROID_SDK/build-tools -name "aidl" -type f || echo "AIDL not found"
           ls -la $BUILDOZER_ANDROID_SDK/ndk/25.2.9519653 || echo "NDK 25.2.9519653 not found"
 
-      # 10. Инициализация и настройка Buildozer
+      # 10. Инициализация Buildozer
+      - name: Initialize Buildozer
+        run: |
+          buildozer android update
+          ls -la ~/.buildozer/android/platform/python-for-android || echo "python-for-android directory not found"
+
+      # 11. Настройка Buildozer
       - name: Configure Buildozer
         run: |
           if [ ! -f buildozer.spec ]; then
@@ -131,7 +139,7 @@ jobs:
           echo "android.skip_update = False" >> buildozer.spec
           echo "p4a.branch = master" >> buildozer.spec
 
-      # 11. Диагностика
+      # 12. Диагностика
       - name: Debug info
         run: |
           echo "=== Environment ==="
@@ -156,12 +164,14 @@ jobs:
           fi
           echo "=== NDK check ==="
           ls -la $BUILDOZER_ANDROID_SDK/ndk/25.2.9519653 || echo "NDK 25.2.9519653 not found"
+          echo "=== python-for-android check ==="
+          ls -la ~/.buildozer/android/platform/python-for-android || echo "python-for-android directory not found"
           echo "=== Final buildozer.spec ==="
           cat buildozer.spec
           echo "=== Disk usage ==="
           du -sh ~/.buildozer || echo "Buildozer directory not found"
 
-      # 12. Компиляция APK
+      # 13. Компиляция APK
       - name: Build APK
         timeout-minutes: 90
         run: |
@@ -173,13 +183,12 @@ jobs:
           echo "Starting APK build with:"
           echo "ANDROID_HOME: $ANDROID_HOME"
           echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
-          buildozer android clean
           buildozer -v android debug --arch=arm64-v8a
         env:
           ANDROID_HOME: ${{ env.BUILDOZER_ANDROID_SDK }}
           ANDROID_SDK_ROOT: ${{ env.BUILDOZER_ANDROID_SDK }}
 
-      # 13. Загрузка APK
+      # 14. Загрузка APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
