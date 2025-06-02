@@ -147,6 +147,12 @@ jobs:
           echo "android.gradle_plugin_version = 7.4.0" >> buildozer.spec
           echo "android.ant_path = /usr/bin" >> buildozer.spec
           echo "android.skip_update = False" >> buildozer.spec
+          
+          # Настройки python-for-android
+          echo "" >> buildozer.spec
+          echo "# Python-for-android configuration" >> buildozer.spec
+          echo "p4a.branch = master" >> buildozer.spec
+          echo "p4a.bootstrap = sdl2" >> buildozer.spec
 
       # 10. Диагностика
       - name: Debug info
