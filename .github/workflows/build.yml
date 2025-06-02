@@ -33,7 +33,23 @@ jobs:
         with:
           python-version: '3.9'
 
-      # 4. Установка зависимостей
+      # 4. Кэширование python-for-android
+      - name: Cache python-for-android
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer/android/platform/python-for-android
+          key: python-for-android-${{ hashFiles('buildozer.spec') }}
+          restore-keys: python-for-android-
+
+      # 5. Кэширование Android SDK
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.buildozer/android/platform/android-sdk
+          key: android-sdk-${{ hashFiles('buildozer.spec') }}
+          restore-keys: android-sdk-
+
+      # 6. Установка зависимостей
       - name: Install dependencies
         run: |
           sudo apt update
@@ -46,56 +62,60 @@ jobs:
           ls -la /usr/lib/x86_64-linux-gnu/pkgconfig/openssl.pc || echo "openssl.pc not found"
           dpkg -l | grep libssl-dev || echo "libssl-dev not installed"
 
-      # 5. Очистка конфликтующих версий NDK и старых кэшей
+      # 7. Очистка конфликтующих версий NDK и старых кэшей
       - name: Clean up other NDK versions and caches
         run: |
           sudo rm -rf /usr/local/lib/android/sdk/ndk/*
           sudo rm -rf ~/.buildozer/android/platform/android-ndk-*
           sudo rm -rf ~/.buildozer/cache
-          sudo rm -rf ~/.buildozer/android/platform/python-for-android
 
-      # 6. Проверка сетевой доступности
+      # 8. Проверка сетевой доступности
       - name: Check network connectivity
         run: |
           ping -c 4 github.com || echo "Cannot reach github.com"
           ping -c 4 dl.google.com || echo "Cannot reach dl.google.com"
           curl -I https://github.com/kivy/python-for-android || echo "Cannot access python-for-android repository"
+          nslookup github.com || echo "DNS resolution failed for github.com"
 
-      # 7. Клонирование python-for-android с повторными попытками
+      # 9. Клонирование python-for-android с повторными попытками
       - name: Clone python-for-android
         run: |
-          mkdir -p ~/.buildozer/android/platform
-          for i in {1..3}; do
-            git clone https://github.com/kivy/python-for-android.git ~/.buildozer/android/platform/python-for-android && break
-            echo "Retry $i failed, waiting 10 seconds..."
-            sleep 10
-          done
+          if [ ! -d ~/.buildozer/android/platform/python-for-android ]; then
+            mkdir -p ~/.buildozer/android/platform
+            for i in {1..5}; do
+              git clone https://github.com/kivy/python-for-android.git ~/.buildozer/android/platform/python-for-android && break
+              echo "Retry $i failed, waiting 15 seconds..."
+              sleep 15
+            done
+          fi
           ls -la ~/.buildozer/android/platform/python-for-android || echo "Failed to clone python-for-android"
 
-      # 8. Создание директории для Buildozer
+      # 10. Создание директории для Buildozer
       - name: Setup Buildozer directories
         run: |
           mkdir -p ~/.buildozer/android/platform
           BUILDOZER_ANDROID_SDK=~/.buildozer/android/platform/android-sdk
           echo "BUILDOZER_ANDROID_SDK=$BUILDOZER_ANDROID_SDK" >> $GITHUB_ENV
 
-      # 9. Установка Android SDK
+      # 11. Установка Android SDK
       - name: Install Android SDK
         run: |
-          cd ~/.buildozer/android/platform
-          for i in {1..3}; do
-            wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O commandlinetools.zip && break
-            echo "Retry $i failed, waiting 10 seconds..."
-            sleep 10
-          done
-          unzip commandlinetools.zip
-          mkdir -p android-sdk/cmdline-tools
-          mv cmdline-tools android-sdk/cmdline-tools/latest
+          if [ ! -d ~/.buildozer/android/platform/android-sdk ]; then
+            cd ~/.buildozer/android/platform
+            for i in {1..5}; do
+              wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O commandlinetools.zip && break
+              echo "Retry $i failed, waiting 15 seconds..."
+              sleep 15
+            done
+            unzip commandlinetools.zip
+            mkdir -p android-sdk/cmdline-tools
+            mv cmdline-tools android-sdk/cmdline-tools/latest
+          fi
           ANDROID_HOME=$BUILDOZER_ANDROID_SDK
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
 
-      # 10. Принятие всех лицензий
+      # 12. Принятие всех лицензий
       - name: Accept all licenses
         run: |
           mkdir -p $BUILDOZER_ANDROID_SDK/licenses
@@ -106,7 +126,7 @@ jobs:
           echo "79120722343a6f314e0719f863036c702b0e6b2a" > $BUILDOZER_ANDROID_SDK/licenses/android-ndk-license
           echo "c5d028512b2ee471fdc0df39c09d954d50b6e2b2" >> $BUILDOZER_ANDROID_SDK/licenses/android-ndk-license
 
-      # 11. Установка SDK компонентов
+      # 13. Установка SDK компонентов
       - name: Install SDK components
         run: |
           $BUILDOZER_ANDROID_SDK/cmdline-tools/latest/bin/sdkmanager --sdk_root=$BUILDOZER_ANDROID_SDK \
@@ -125,37 +145,39 @@ jobs:
           find $BUILDOZER_ANDROID_SDK/build-tools -name "aidl" -type f || echo "AIDL not found"
           ls -la $BUILDOZER_ANDROID_SDK/ndk/25.2.9519653 || echo "NDK 25.2.9519653 not found"
 
-      # 12. Настройка Buildozer
+      # 14. Настройка Buildozer
       - name: Configure Buildozer
         run: |
           if [ ! -f buildozer.spec ]; then
             buildozer init
+            cat > buildozer.spec <<EOL
+[app]
+title = Notepad
+package.name = notepad
+package.domain = org.my
+source.dir = .
+source.include_exts = py,png,jpg,kv,atlas,db
+source.include_patterns = icon.png
+icon.filename = icon.png
+requirements = python3,kivy==2.3.0
+android.permissions = INTERNET,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
+android.api = 33
+android.minapi = 21
+android.ndk = 25.2.9519653
+android.sdk_path = ~/.buildozer/android/platform/android-sdk
+android.ndk_path = ~/.buildozer/android/platform/android-sdk/ndk/25.2.9519653
+android.archs = arm64-v8a
+log_level = 2
+android.gradle_version = 8.1
+android.gradle_plugin_version = 8.1.0
+android.ant_path = /usr/bin
+android.skip_update = True
+p4a.branch = master
+EOL
           fi
-          sed -i 's/title = My Application/title = Notepad/' buildozer.spec
-          sed -i 's/package.name = myapp/package.name = notepad/' buildozer.spec
-          sed -i 's/package.domain = org.test/package.domain = org.my/' buildozer.spec
-          sed -i 's/#icon.filename = %(source.dir)s\/icon.png/icon.filename = icon.png/' buildozer.spec
-          sed -i 's/requirements = python3,kivy/requirements = python3,kivy==2.3.0,openssl/' buildozer.spec
-          sed -i 's/#android.permissions = INTERNET/android.permissions = INTERNET,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE/' buildozer.spec
-          sed -i 's/source.include_exts = py,png,jpg,kv,atlas/source.include_exts = py,png,jpg,kv,atlas,db/' buildozer.spec
-          sed -i 's/#source.include_patterns = assets\/*,README.md/source.include_patterns = icon.png/' buildozer.spec
-          sed -i 's/#android.api = 27/android.api = 33/' buildozer.spec
-          sed -i 's/android.api = .*/android.api = 33/' buildozer.spec
-          sed -i 's/#android.minapi = 21/android.minapi = 21/' buildozer.spec
-          sed -i 's/#android.ndk = 25.2.9519653/android.ndk = 25.2.9519653/' buildozer.spec
-          sed -i 's/#android.sdk_path = /android.sdk_path = ~\/.buildozer\/android\/platform\/android-sdk/' buildozer.spec
-          sed -i 's/#android.ndk_path = /android.ndk_path = ~\/.buildozer\/android\/platform\/android-sdk\/ndk\/25.2.9519653/' buildozer.spec
-          sed -i 's/#android.archs = arm64-v8a/android.archs = arm64-v8a/' buildozer.spec
-          sed -i 's/android.archs = .*/android.archs = arm64-v8a/' buildozer.spec
-          sed -i 's/#log_level = 2/log_level = 2/' buildozer.spec
-          echo "" >> buildozer.spec
-          echo "android.gradle_version = 8.1" >> buildozer.spec
-          echo "android.gradle_plugin_version = 8.1.0" >> buildozer.spec
-          echo "android.ant_path = /usr/bin" >> buildozer.spec
-          echo "android.skip_update = True" >> buildozer.spec
-          echo "p4a.branch = master" >> buildozer.spec
+          cat buildozer.spec
 
-      # 13. Диагностика
+      # 15. Диагностика
       - name: Debug info
         run: |
           echo "=== Environment ==="
@@ -182,12 +204,18 @@ jobs:
           ls -la $BUILDOZER_ANDROID_SDK/ndk/25.2.9519653 || echo "NDK 25.2.9519653 not found"
           echo "=== python-for-android check ==="
           ls -la ~/.buildozer/android/platform/python-for-android || echo "python-for-android directory not found"
+          echo "=== Build directory check ==="
+          ls -la .buildozer/android/platform/build-arm64-v8a || echo "Build directory not found"
+          echo "=== Bin directory check ==="
+          ls -la bin/ || echo "Bin directory not found"
+          echo "=== Repository structure ==="
+          ls -la . || echo "Repository directory empty"
           echo "=== Final buildozer.spec ==="
           cat buildozer.spec
           echo "=== Disk usage ==="
           du -sh ~/.buildozer || echo "Buildozer directory not found"
 
-      # 14. Компиляция APK
+      # 16. Компиляция APK
       - name: Build APK
         timeout-minutes: 90
         run: |
@@ -199,18 +227,19 @@ jobs:
           echo "Starting APK build with:"
           echo "ANDROID_HOME: $ANDROID_HOME"
           echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
-          for i in {1..3}; do
+          for i in {1..5}; do
             buildozer -v android debug --arch=arm64-v8a && break
-            echo "Build retry $i failed, waiting 10 seconds..."
-            sleep 10
+            echo "Build retry $i failed, waiting 15 seconds..."
+            sleep 15
           done
         env:
           ANDROID_HOME: ${{ env.BUILDOZER_ANDROID_SDK }}
-          ANDROID_SDK_ROOT: ${{ env.BUILDOZER_ANDROID_SDK }}
+          ANDROID_TOP: ${{ env.BUILDOZER_ANDROID_SDK }}
 
-      # 15. Загрузка APK
+      # 17. Загрузка APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: notepad-apk
-          path: bin/*.apk
+          name: apk
+          path: ./bin/*.apk
+          if-no-files-found: warn
